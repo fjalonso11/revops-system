@@ -1,0 +1,60 @@
+{
+  "name": "HubSpot Daily Sync",
+  "description": "Triggers a full HubSpot sync every day at 6:00 AM UTC",
+  "nodes": [
+    {
+      "id": "trigger",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "cronExpression", "expression": "0 6 * * *" }]
+        }
+      },
+      "position": [240, 300]
+    },
+    {
+      "id": "sync_request",
+      "name": "Trigger HubSpot Sync",
+      "type": "n8n-nodes-base.httpRequest",
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.REVOPS_API_URL }}/sync/hubspot",
+        "authentication": "none",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        }
+      },
+      "position": [460, 300]
+    },
+    {
+      "id": "check_status",
+      "name": "Wait & Check Status",
+      "type": "n8n-nodes-base.httpRequest",
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.REVOPS_API_URL }}/sync/hubspot/status"
+      },
+      "position": [680, 300]
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [[{ "node": "Trigger HubSpot Sync", "type": "main", "index": 0 }]]
+    },
+    "Trigger HubSpot Sync": {
+      "main": [[{ "node": "Wait & Check Status", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "timezone": "America/Sao_Paulo"
+  },
+  "meta": {
+    "layer": "orchestration",
+    "triggers": ["schedule"],
+    "env_vars_required": ["REVOPS_API_URL"]
+  }
+}

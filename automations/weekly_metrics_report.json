@@ -1,0 +1,59 @@
+{
+  "name": "Weekly Revenue Metrics Report",
+  "description": "Every Monday at 8:00 AM UTC: fetch all metrics, run Claude AI analysis, post to Slack",
+  "nodes": [
+    {
+      "id": "trigger",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "cronExpression", "expression": "0 8 * * 1" }]
+        }
+      },
+      "position": [240, 300]
+    },
+    {
+      "id": "fetch_metrics",
+      "name": "Fetch All Metrics",
+      "type": "n8n-nodes-base.httpRequest",
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.REVOPS_API_URL }}/metrics/all",
+        "queryParameters": {
+          "parameters": [{ "name": "period", "value": "30" }]
+        }
+      },
+      "position": [460, 300]
+    },
+    {
+      "id": "ai_analysis",
+      "name": "Claude AI Analysis",
+      "type": "n8n-nodes-base.httpRequest",
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.REVOPS_API_URL }}/ai/analyze",
+        "sendBody": true,
+        "contentType": "json",
+        "body": "={{ JSON.stringify({ period_days: 30, question: 'Weekly summary: what are the top 3 actions the team should take this week?' }) }}"
+      },
+      "position": [680, 300]
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [[{ "node": "Fetch All Metrics", "type": "main", "index": 0 }]]
+    },
+    "Fetch All Metrics": {
+      "main": [[{ "node": "Claude AI Analysis", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "timezone": "America/Sao_Paulo"
+  },
+  "meta": {
+    "layer": "orchestration",
+    "triggers": ["schedule"],
+    "env_vars_required": ["REVOPS_API_URL"]
+  }
+}
