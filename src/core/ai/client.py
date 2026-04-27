@@ -31,7 +31,7 @@ def analyze_metrics(metrics: dict, question: str | None = None) -> str:
         user_content += "\n\nProvide a comprehensive analysis with key insights and top 3 recommendations."
 
     response = client.messages.create(
-        model="claude-sonnet-4-6",
+        model="claude-sonnet-4-5-20251022",
         max_tokens=2048,
         system=[
             {

@@ -25,6 +25,6 @@ def analyze(req: AnalyzeRequest):
     return {
         "metrics": metrics,
         "analysis": analyze_metrics(metrics, question=req.question),
-        "model": "claude-sonnet-4-6",
+        "model": "claude-sonnet-4-5-20251022",
         "period_days": req.period_days,
     }
