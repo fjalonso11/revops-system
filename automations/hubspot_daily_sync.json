@@ -1,60 +1,133 @@
 {
-  "name": "HubSpot Daily Sync",
-  "description": "Triggers a full HubSpot sync every day at 6:00 AM UTC",
+  "name": "RevOps Daily Sync",
   "nodes": [
     {
-      "id": "trigger",
-      "name": "Schedule Trigger",
-      "type": "n8n-nodes-base.scheduleTrigger",
       "parameters": {
         "rule": {
-          "interval": [{ "field": "cronExpression", "expression": "0 6 * * *" }]
-        }
-      },
-      "position": [240, 300]
-    },
-    {
-      "id": "sync_request",
-      "name": "Trigger HubSpot Sync",
-      "type": "n8n-nodes-base.httpRequest",
-      "parameters": {
-        "method": "POST",
-        "url": "={{ $env.REVOPS_API_URL }}/sync/hubspot",
-        "authentication": "none",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            { "name": "Content-Type", "value": "application/json" }
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 0 14 * * *"
+            }
           ]
         }
       },
-      "position": [460, 300]
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        0
+      ],
+      "id": "ec39b3ee-6270-4433-bc71-7527732b0532",
+      "name": "Schedule Trigger"
     },
     {
-      "id": "check_status",
-      "name": "Wait & Check Status",
-      "type": "n8n-nodes-base.httpRequest",
       "parameters": {
-        "method": "GET",
-        "url": "={{ $env.REVOPS_API_URL }}/sync/hubspot/status"
+        "method": "POST",
+        "url": "https://revops-system-production.up.railway.app/ai/analyze",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\"period_days\": 30}",
+        "options": {}
       },
-      "position": [680, 300]
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        416,
+        0
+      ],
+      "id": "b83885c6-c324-47ce-b4b5-a0c59079206f",
+      "name": "HTTP Request1"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://revops-system-production.up.railway.app/sync/hubspot",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        208,
+        0
+      ],
+      "id": "a32f7a59-3e1c-401b-a239-72cb8c6a3d47",
+      "name": "Analyze with Claude"
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "#revops-alerts",
+          "mode": "name"
+        },
+        "text": "={{ $json.analysis }}",
+        "otherOptions": {}
+      },
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.4,
+      "position": [
+        624,
+        0
+      ],
+      "id": "ff275a66-20f1-463e-a2fb-86f0c0d65c5b",
+      "name": "Post to Slack",
+      "webhookId": "f2842eaf-dd53-419f-bd72-b1b473fc1e6c",
+      "credentials": {
+        "slackApi": {
+          "id": "k91wKSfo5hhlqpTE",
+          "name": "Slack account"
+        }
+      }
     }
   ],
+  "pinData": {},
   "connections": {
     "Schedule Trigger": {
-      "main": [[{ "node": "Trigger HubSpot Sync", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Analyze with Claude",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
-    "Trigger HubSpot Sync": {
-      "main": [[{ "node": "Wait & Check Status", "type": "main", "index": 0 }]]
+    "HTTP Request1": {
+      "main": [
+        [
+          {
+            "node": "Post to Slack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analyze with Claude": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
+  "active": true,
   "settings": {
-    "timezone": "America/Sao_Paulo"
+    "executionOrder": "v1",
+    "binaryMode": "separate"
   },
+  "versionId": "c834143b-2bc9-4dfb-990f-f62e8e68c15a",
   "meta": {
-    "layer": "orchestration",
-    "triggers": ["schedule"],
-    "env_vars_required": ["REVOPS_API_URL"]
-  }
+    "templateCredsSetupCompleted": true,
+    "instanceId": "580d8bcf12ddc8d5cddc0d0ea318712103dbb982ef447f0a7cbb8a3d9ee625d5"
+  },
+  "id": "YTIeEEBkViy1JqQI",
+  "tags": []
 }
