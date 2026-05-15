@@ -1,5 +1,4 @@
 import sys
-import json
 import logging
 from datetime import datetime, timezone
 from supabase import Client
@@ -57,11 +56,79 @@ def _finish_sync_log(
         log.warning("Could not update sync_log entry: %s", e)
 
 
-def sync_companies(db: Client) -> int:
+# ---------------------------------------------------------------------------
+# Validation layer — runs between HubSpot fetch and Supabase upsert
+# Returns (is_valid: bool, reason: str | None)
+# ---------------------------------------------------------------------------
+
+def _validate_company(company) -> tuple[bool, str | None]:
+    if not company.hubspot_id:
+        return False, "missing hubspot_id"
+    if not company.name or not str(company.name).strip():
+        return False, "missing or empty name"
+    if company.mrr is not None and company.mrr < 0:
+        return False, f"negative mrr: {company.mrr}"
+    if company.arr is not None and company.arr < 0:
+        return False, f"negative arr: {company.arr}"
+    return True, None
+
+
+def _validate_contact(contact) -> tuple[bool, str | None]:
+    if not contact.hubspot_id:
+        return False, "missing hubspot_id"
+    if contact.email and "@" not in str(contact.email):
+        return False, f"invalid email format: {contact.email}"
+    # Lifecycle timestamp ordering: lead → mql → sql → customer
+    timestamps = [
+        ("became_lead_at", contact.became_lead_at),
+        ("became_mql_at", contact.became_mql_at),
+        ("became_sql_at", contact.became_sql_at),
+        ("became_customer_at", contact.became_customer_at),
+    ]
+    last_name, last_ts = None, None
+    for name, ts in timestamps:
+        if ts is not None:
+            if last_ts is not None and ts < last_ts:
+                return False, f"{name} ({ts}) is before {last_name} ({last_ts})"
+            last_name, last_ts = name, ts
+    return True, None
+
+
+def _validate_deal(deal) -> tuple[bool, str | None]:
+    if not deal.hubspot_id:
+        return False, "missing hubspot_id"
+    if deal.amount is not None and deal.amount < 0:
+        return False, f"negative amount: {deal.amount}"
+    if deal.is_won and not deal.is_closed:
+        return False, "is_won=True but is_closed=False"
+    valid_types = {"newbusiness", "existingbusiness", None}
+    if deal.type not in valid_types:
+        return False, f"invalid type: {deal.type}"
+    return True, None
+
+
+# ---------------------------------------------------------------------------
+# Sync functions
+# ---------------------------------------------------------------------------
+
+def sync_companies(db: Client) -> tuple[int, int, list[str]]:
+    """Returns (synced, skipped, validation_errors)."""
     log.info("Fetching companies from HubSpot...")
     companies = hs.fetch_all_companies()
-    log.info("Upserting %d companies into Supabase...", len(companies))
+    log.info("Validating and upserting %d companies...", len(companies))
+
+    synced, skipped = 0, 0
+    validation_errors = []
+
     for company in companies:
+        valid, reason = _validate_company(company)
+        if not valid:
+            msg = f"company {company.hubspot_id}: {reason}"
+            log.warning("SKIPPED — %s", msg)
+            validation_errors.append(msg)
+            skipped += 1
+            continue
+
         db.table("companies").upsert({
             "hubspot_id": company.hubspot_id,
             "name": company.name,
@@ -75,14 +142,31 @@ def sync_companies(db: Client) -> int:
             "hubspot_synced_at": _now(),
             "raw_data": company.raw_data,
         }, on_conflict="hubspot_id").execute()
-    return len(companies)
+        synced += 1
+
+    return synced, skipped, validation_errors
 
 
-def sync_contacts(db: Client, company_id_map: dict[str, str]) -> int:
+def sync_contacts(
+    db: Client, company_id_map: dict[str, str]
+) -> tuple[int, int, list[str]]:
+    """Returns (synced, skipped, validation_errors)."""
     log.info("Fetching contacts from HubSpot...")
     contacts = hs.fetch_all_contacts()
-    log.info("Upserting %d contacts into Supabase...", len(contacts))
+    log.info("Validating and upserting %d contacts...", len(contacts))
+
+    synced, skipped = 0, 0
+    validation_errors = []
+
     for contact in contacts:
+        valid, reason = _validate_contact(contact)
+        if not valid:
+            msg = f"contact {contact.hubspot_id}: {reason}"
+            log.warning("SKIPPED — %s", msg)
+            validation_errors.append(msg)
+            skipped += 1
+            continue
+
         db.table("contacts").upsert({
             "hubspot_id": contact.hubspot_id,
             "email": contact.email,
@@ -100,18 +184,33 @@ def sync_contacts(db: Client, company_id_map: dict[str, str]) -> int:
             "hubspot_synced_at": _now(),
             "raw_data": contact.raw_data,
         }, on_conflict="hubspot_id").execute()
-    return len(contacts)
+        synced += 1
+
+    return synced, skipped, validation_errors
 
 
 def sync_deals(
     db: Client,
     company_id_map: dict[str, str],
     contact_id_map: dict[str, str],
-) -> int:
+) -> tuple[int, int, list[str]]:
+    """Returns (synced, skipped, validation_errors)."""
     log.info("Fetching deals from HubSpot...")
     deals = hs.fetch_all_deals()
-    log.info("Upserting %d deals into Supabase...", len(deals))
+    log.info("Validating and upserting %d deals...", len(deals))
+
+    synced, skipped = 0, 0
+    validation_errors = []
+
     for deal in deals:
+        valid, reason = _validate_deal(deal)
+        if not valid:
+            msg = f"deal {deal.hubspot_id}: {reason}"
+            log.warning("SKIPPED — %s", msg)
+            validation_errors.append(msg)
+            skipped += 1
+            continue
+
         db.table("deals").upsert({
             "hubspot_id": deal.hubspot_id,
             "name": deal.name,
@@ -130,16 +229,28 @@ def sync_deals(
             "hubspot_synced_at": _now(),
             "raw_data": deal.raw_data,
         }, on_conflict="hubspot_id").execute()
-    return len(deals)
+        synced += 1
+
+    return synced, skipped, validation_errors
 
 
 def run_full_sync(db: Client) -> dict:
     """Syncs companies → contacts → deals. Order matters for FK resolution."""
-    result: dict = {"companies": 0, "contacts": 0, "deals": 0, "errors": []}
+    result: dict = {
+        "companies": 0,
+        "contacts": 0,
+        "deals": 0,
+        "skipped": 0,
+        "errors": [],
+        "validation_errors": [],
+    }
     log_id = _start_sync_log(db)
 
     try:
-        result["companies"] = sync_companies(db)
+        synced, skipped, val_errors = sync_companies(db)
+        result["companies"] = synced
+        result["skipped"] += skipped
+        result["validation_errors"].extend(val_errors)
     except Exception as e:
         log.error("companies sync failed: %s", e)
         result["errors"].append(f"companies: {e}")
@@ -147,7 +258,10 @@ def run_full_sync(db: Client) -> dict:
     company_id_map = _build_id_map(db, "companies")
 
     try:
-        result["contacts"] = sync_contacts(db, company_id_map)
+        synced, skipped, val_errors = sync_contacts(db, company_id_map)
+        result["contacts"] = synced
+        result["skipped"] += skipped
+        result["validation_errors"].extend(val_errors)
     except Exception as e:
         log.error("contacts sync failed: %s", e)
         result["errors"].append(f"contacts: {e}")
@@ -155,7 +269,10 @@ def run_full_sync(db: Client) -> dict:
     contact_id_map = _build_id_map(db, "contacts")
 
     try:
-        result["deals"] = sync_deals(db, company_id_map, contact_id_map)
+        synced, skipped, val_errors = sync_deals(db, company_id_map, contact_id_map)
+        result["deals"] = synced
+        result["skipped"] += skipped
+        result["validation_errors"].extend(val_errors)
     except Exception as e:
         log.error("deals sync failed: %s", e)
         result["errors"].append(f"deals: {e}")
@@ -163,6 +280,11 @@ def run_full_sync(db: Client) -> dict:
     total = result["companies"] + result["contacts"] + result["deals"]
     status = "failed" if result["errors"] else "success"
     _finish_sync_log(db, log_id, status, total, result["errors"])
+
+    if result["validation_errors"]:
+        log.warning(
+            "%d records skipped due to validation errors", result["skipped"]
+        )
 
     return result
 
@@ -180,14 +302,19 @@ if __name__ == "__main__":
         sys.exit(1)
 
     log.info(
-        "Sync complete — companies=%d  contacts=%d  deals=%d  errors=%d",
+        "Sync complete — companies=%d  contacts=%d  deals=%d  skipped=%d  errors=%d",
         result["companies"],
         result["contacts"],
         result["deals"],
+        result["skipped"],
         len(result["errors"]),
     )
 
+    if result["validation_errors"]:
+        for err in result["validation_errors"]:
+            log.warning("  VALIDATION: %s", err)
+
     if result["errors"]:
         for err in result["errors"]:
-            log.error("  %s", err)
+            log.error("  ERROR: %s", err)
         sys.exit(1)
