@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     api_env: str = "development"
     api_host: str = "0.0.0.0"
     api_port: int = 8000
+    api_key: str = ""  # If empty, authentication is disabled (local dev only)
 
     # Supabase
     supabase_url: str
