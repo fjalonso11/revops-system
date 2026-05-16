@@ -29,4 +29,3 @@ app.include_router(sync.router, dependencies=[Security(verify_api_key)])
 app.include_router(metrics.router, dependencies=[Security(verify_api_key)])
 app.include_router(ai.router, dependencies=[Security(verify_api_key)])
 app.include_router(webhooks.router)  # /webhooks — has its own signature verification
-`
