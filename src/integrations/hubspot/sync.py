@@ -101,7 +101,7 @@ def _validate_deal(deal) -> tuple[bool, str | None]:
         return False, f"negative amount: {deal.amount}"
     if deal.is_won and not deal.is_closed:
         return False, "is_won=True but is_closed=False"
-    valid_types = {"newbusiness", "existingbusiness", None}
+    valid_types = {"newbusiness", "existingbusiness", "churn", "contraction", None}
     if deal.type not in valid_types:
         return False, f"invalid type: {deal.type}"
     return True, None
