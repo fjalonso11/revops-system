@@ -19,7 +19,11 @@ def _avg(values: list[float]) -> float | None:
 
 
 def compute_velocity(db: Client, period_days: int = 30) -> dict:
-    """Lead-to-cash funnel timing: lead→MQL→SQL→customer, deal cycle time."""
+    """Lead-to-cash funnel timing: lead→MQL→SQL→customer, deal cycle time.
+
+    Sample sizes are reported alongside each average so Claude can distinguish
+    statistically meaningful metrics from averages based on 1-2 contacts.
+    """
     since = (datetime.now(timezone.utc) - timedelta(days=period_days)).isoformat()
 
     contacts = db.table("contacts").select(
@@ -58,13 +62,18 @@ def compute_velocity(db: Client, period_days: int = 30) -> dict:
         else None
     )
 
+    total_contacts = len(contacts.data)
+
     return {
         "period_days": period_days,
+        "contacts_sampled": total_contacts,
         "avg_lead_to_mql_days": avg_l2m,
+        "lead_to_mql_sample": f"{len(lead_to_mql)} of {total_contacts}",
         "avg_mql_to_sql_days": avg_m2s,
+        "mql_to_sql_sample": f"{len(mql_to_sql)} of {total_contacts}",
         "avg_sql_to_customer_days": avg_s2c,
+        "sql_to_customer_sample": f"{len(sql_to_customer)} of {total_contacts}",
         "avg_lead_to_cash_days": lead_to_cash,
         "avg_deal_cycle_days": _avg(deal_cycles),
         "deals_won": len(deal_cycles),
-        "contacts_sampled": len(contacts.data),
     }
