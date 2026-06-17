@@ -5,7 +5,7 @@ from src.core.ai.client import analyze_metrics
 from src.revenue.volume import compute_volume
 from src.revenue.velocity import compute_velocity
 from src.revenue.yield_ import compute_yield
-from src.revenue.snapshots import save_metrics_snapshot
+from src.revenue.snapshots import save_all_period_snapshots
 import logging
 
 log = logging.getLogger(__name__)
@@ -22,16 +22,18 @@ class AnalyzeRequest(BaseModel):
 def analyze(req: AnalyzeRequest):
     db = get_supabase()
 
-    volume = compute_volume(db, period_days=req.period_days)
-    velocity = compute_velocity(db, period_days=req.period_days)
-    yield_ = compute_yield(db, period_days=req.period_days)
+    # Compute 30-day metrics for Claude analysis
+    volume = compute_volume(db, period_days=30)
+    velocity = compute_velocity(db, period_days=30)
+    yield_ = compute_yield(db, period_days=30)
 
-    # Save snapshot before analysis — data is already computed
+    # Save snapshots for all five period windows in the background
+    # Non-fatal: if this fails, analysis still completes and Slack still posts
     try:
-        rows_saved = save_metrics_snapshot(
-            db, volume, velocity, yield_, period_days=req.period_days
+        total_saved = save_all_period_snapshots(
+            db, compute_volume, compute_velocity, compute_yield
         )
-        log.info("Snapshot saved: %d rows.", rows_saved)
+        log.info("Snapshots saved across all periods: %d rows.", total_saved)
     except Exception as e:
         log.warning("Snapshot save failed (non-fatal): %s", e)
 
