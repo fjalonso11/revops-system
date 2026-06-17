@@ -11,6 +11,11 @@ across three layers:
 - Velocity: sales efficiency (lead-to-cash cycle times, conversion rates by funnel stage)
 - Yield: revenue quality (NRR, expansion MRR, churn MRR)
 
+When prior period metrics are provided, always reason about direction first — whether each metric \
+is improving, deteriorating, or flat — before commenting on absolute values. A metric moving in \
+the wrong direction is more urgent than a metric that is simply low. When prior metrics are not \
+available, analyze the current snapshot and note that trend context is not yet available.
+
 Provide concise, actionable insights. Respond in the same language as the user's question \
 (Spanish or English). Focus on trends, anomalies, and recommendations relevant to early-stage \
 LatAm B2B startups."""
@@ -21,14 +26,22 @@ def get_anthropic() -> anthropic.Anthropic:
     return anthropic.Anthropic(api_key=settings.anthropic_api_key)
 
 
-def analyze_metrics(metrics: dict, question: str | None = None) -> str:
+def analyze_metrics(
+    metrics: dict,
+    question: str | None = None,
+    prior_metrics: dict | None = None,
+) -> str:
     client = get_anthropic()
 
     user_content = f"Current revenue metrics:\n\n{metrics}"
-    if question:
+
+    if prior_metrics:
+        user_content += f"\n\nPrior period metrics (for trend comparison):\n\n{prior_metrics}"
+        user_content += "\n\nAnalyze direction first — what is improving, deteriorating, or flat — then provide absolute context and top 3 recommendations."
+    elif question:
         user_content += f"\n\nSpecific question: {question}"
     else:
-        user_content += "\n\nProvide a comprehensive analysis with key insights and top 3 recommendations."
+        user_content += "\n\nPrior period data is not yet available. Provide a comprehensive analysis of current state with key insights and top 3 recommendations."
 
     response = client.messages.create(
         model="claude-haiku-4-5-20251001",
