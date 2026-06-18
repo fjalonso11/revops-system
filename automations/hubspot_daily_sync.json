@@ -73,7 +73,7 @@
       ],
       "id": "ff275a66-20f1-463e-a2fb-86f0c0d65c5b",
       "name": "Post to Slack",
-      "webhookId": "f2842eaf-dd53-419f-bd72-b1b473fc1e6c",
+      "webhookId": "REDACTED",
       "credentials": {
         "slackApi": {
           "id": "k91wKSfo5hhlqpTE",
@@ -126,7 +126,7 @@
   "versionId": "c834143b-2bc9-4dfb-990f-f62e8e68c15a",
   "meta": {
     "templateCredsSetupCompleted": true,
-    "instanceId": "580d8bcf12ddc8d5cddc0d0ea318712103dbb982ef447f0a7cbb8a3d9ee625d5"
+    "instanceId": "REDACTED"
   },
   "id": "YTIeEEBkViy1JqQI",
   "tags": []

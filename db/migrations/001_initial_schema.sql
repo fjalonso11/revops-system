@@ -39,7 +39,7 @@ CREATE TABLE IF NOT EXISTS contacts (
 );
 
 -- Deals (HubSpot deals) — drives all three revenue metric layers
--- type values: newbusiness | existingbusiness
+-- type values: newbusiness | existingbusiness | churn | contraction
 CREATE TABLE IF NOT EXISTS deals (
     id                  UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     hubspot_id          VARCHAR(50) UNIQUE,
