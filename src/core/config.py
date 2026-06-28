@@ -28,5 +28,8 @@ class Settings(BaseSettings):
     # n8n (optional — for inbound webhook signature verification)
     n8n_webhook_secret: str = ""
 
+    # Exa (optional — for account enrichment and churn signal detection)
+    exa_api_key: str = ""
+
 
 settings = Settings()
