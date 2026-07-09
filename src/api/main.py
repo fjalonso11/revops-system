@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Security, HTTPException
 from fastapi.security.api_key import APIKeyHeader
 from starlette.status import HTTP_403_FORBIDDEN
-from src.api.routes import health, sync, metrics, ai, webhooks
+from src.api.routes import health, sync, metrics, ai, webhooks, exa
 from src.core.config import settings
 
 # API key authentication
@@ -28,4 +28,5 @@ app.include_router(health.router)  # /health — no auth (monitoring needs this 
 app.include_router(sync.router, dependencies=[Security(verify_api_key)])
 app.include_router(metrics.router, dependencies=[Security(verify_api_key)])
 app.include_router(ai.router, dependencies=[Security(verify_api_key)])
+app.include_router(exa.router, dependencies=[Security(verify_api_key)])
 app.include_router(webhooks.router)  # /webhooks — has its own signature verification
