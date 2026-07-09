@@ -1,13 +1,12 @@
 {
-  "name": "RevOps Daily Sync",
+  "name": "RevOps Daily Sync & Alert",
   "nodes": [
     {
       "parameters": {
         "rule": {
           "interval": [
             {
-              "field": "cronExpression",
-              "expression": "0 0 14 * * *"
+              "triggerAtHour": 8
             }
           ]
         }
@@ -18,16 +17,45 @@
         0,
         0
       ],
-      "id": "ec39b3ee-6270-4433-bc71-7527732b0532",
+      "id": "f303f996-f504-4fc5-9b78-71d45999e400",
       "name": "Schedule Trigger"
     },
     {
       "parameters": {
+        "url": "https://revops-system-production.up.railway.app/exa/enrichments?limit=3",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-Key",
+              "value": "72eda19808be1da136b12574dcecf4d44912a34ebe71a5712d030300481c77a6"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        624,
+        -160
+      ],
+      "id": "a2f2328a-d49c-4069-bab0-a5c2445b85e8",
+      "name": "Get Enrichments"
+    },
+    {
+      "parameters": {
         "method": "POST",
-        "url": "https://revops-system-production.up.railway.app/ai/analyze",
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "{\"period_days\": 30}",
+        "url": "https://revops-system-production.up.railway.app/exa/enrich",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-Key",
+              "value": "72eda19808be1da136b12574dcecf4d44912a34ebe71a5712d030300481c77a6"
+            }
+          ]
+        },
         "options": {}
       },
       "type": "n8n-nodes-base.httpRequest",
@@ -36,13 +64,22 @@
         416,
         0
       ],
-      "id": "b83885c6-c324-47ce-b4b5-a0c59079206f",
-      "name": "HTTP Request1"
+      "id": "32c8a471-60d6-43cc-8a5d-14a493ddc89c",
+      "name": "Enrich Accounts"
     },
     {
       "parameters": {
         "method": "POST",
         "url": "https://revops-system-production.up.railway.app/sync/hubspot",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-Key",
+              "value": "72eda19808be1da136b12574dcecf4d44912a34ebe71a5712d030300481c77a6"
+            }
+          ]
+        },
         "options": {}
       },
       "type": "n8n-nodes-base.httpRequest",
@@ -51,7 +88,40 @@
         208,
         0
       ],
-      "id": "a32f7a59-3e1c-401b-a239-72cb8c6a3d47",
+      "id": "41a7bc6a-91c1-465c-b4db-fd15fe7a0b15",
+      "name": "Sync Hubspot"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://revops-system-production.up.railway.app/ai/analyze",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-Key",
+              "value": "72eda19808be1da136b12574dcecf4d44912a34ebe71a5712d030300481c77a6"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "period_days",
+              "value": "30"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        624,
+        0
+      ],
+      "id": "2a16b7aa-73b6-426d-b6be-5cbaa5a80fa8",
       "name": "Analyze with Claude"
     },
     {
@@ -68,15 +138,55 @@
       "type": "n8n-nodes-base.slack",
       "typeVersion": 2.4,
       "position": [
-        624,
+        848,
         0
       ],
-      "id": "ff275a66-20f1-463e-a2fb-86f0c0d65c5b",
-      "name": "Post to Slack",
-      "webhookId": "REDACTED",
+      "id": "5e6f070d-9413-48a8-931b-b74e1fdd8e73",
+      "name": "Send Revenue Analysis",
+      "webhookId": "05ca41cc-7c08-4c82-ae4d-f2f9e1892c62",
       "credentials": {
         "slackApi": {
-          "id": "k91wKSfo5hhlqpTE",
+          "id": "uCdqMr4T7Af1vSWc",
+          "name": "Slack account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const enrichments = $input.all()[0].json.enrichments;\n\nif (!enrichments || enrichments.length === 0) {\n  return [{ json: { message: '*Account Intelligence*\\nNo enrichment data available yet.' } }];\n}\n\nconst lines = ['*🔍 Account Intelligence — Top Accounts*\\n'];\n\nfor (const e of enrichments) {\n  const name = e.company_name || 'Unknown';\n  const summary = e.summary || '';\n  const signals = e.recent_signals || '';\n  \n  lines.push(`*${name}*`);\n  if (summary) lines.push(summary);\n  if (signals) lines.push(`_Recent signals:_ ${signals}`);\n  lines.push('');\n}\n\nreturn [{ json: { message: lines.join('\\n') } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        832,
+        -160
+      ],
+      "id": "5e58571b-51e7-4308-a60a-dff7e216e7f3",
+      "name": "Format Account Intel"
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "#revops-alerts",
+          "mode": "name"
+        },
+        "text": "={{ $json.message }}",
+        "otherOptions": {}
+      },
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.5,
+      "position": [
+        1040,
+        -160
+      ],
+      "id": "decff081-74b2-4e4b-812b-7535d642a866",
+      "name": "Send Account Intel",
+      "webhookId": "d639988a-5bc4-4aab-ae61-1fa841cead55",
+      "credentials": {
+        "slackApi": {
+          "id": "uCdqMr4T7Af1vSWc",
           "name": "Slack account"
         }
       }
@@ -88,18 +198,45 @@
       "main": [
         [
           {
-            "node": "Analyze with Claude",
+            "node": "Sync Hubspot",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "HTTP Request1": {
+    "Get Enrichments": {
       "main": [
         [
           {
-            "node": "Post to Slack",
+            "node": "Format Account Intel",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enrich Accounts": {
+      "main": [
+        [
+          {
+            "node": "Analyze with Claude",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get Enrichments",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sync Hubspot": {
+      "main": [
+        [
+          {
+            "node": "Enrich Accounts",
             "type": "main",
             "index": 0
           }
@@ -110,7 +247,18 @@
       "main": [
         [
           {
-            "node": "HTTP Request1",
+            "node": "Send Revenue Analysis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Account Intel": {
+      "main": [
+        [
+          {
+            "node": "Send Account Intel",
             "type": "main",
             "index": 0
           }
@@ -123,11 +271,12 @@
     "executionOrder": "v1",
     "binaryMode": "separate"
   },
-  "versionId": "c834143b-2bc9-4dfb-990f-f62e8e68c15a",
+  "versionId": "a0343353-0124-475c-8135-4de31cdd3d84",
   "meta": {
     "templateCredsSetupCompleted": true,
-    "instanceId": "REDACTED"
+    "instanceId": "a63b5899fbb5c186767da2babdb2d65ddbe43cf13d6ad29aa3e72dc09551cf3f"
   },
-  "id": "YTIeEEBkViy1JqQI",
+  "nodeGroups": [],
+  "id": "egM8wwNA1th4kxON",
   "tags": []
 }
