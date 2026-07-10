@@ -81,10 +81,14 @@ def analyze(req: AnalyzeRequest):
     else:
         log.info("No prior metrics found for period=%d days — snapshot only.", req.period_days)
 
+    # analyze_metrics now returns a dict: {"analysis": str, "risk_flags": dict}
+    result = analyze_metrics(metrics, question=req.question, prior_metrics=prior_metrics)
+
     return {
         "metrics": metrics,
         "prior_metrics": prior_metrics,
-        "analysis": analyze_metrics(metrics, question=req.question, prior_metrics=prior_metrics),
+        "analysis": result["analysis"],
+        "risk_flags": result["risk_flags"],
         "model": "claude-haiku-4-5-20251001",
         "period_days": req.period_days,
     }
