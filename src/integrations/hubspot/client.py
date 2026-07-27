@@ -40,6 +40,50 @@ def _bool_prop(props: dict, key: str) -> bool:
     return str(props.get(key, "false")).lower() == "true"
 
 
+def _first_association_id(associations, kind: str) -> str | None:
+    """Return the first associated object id for `kind` ('companies' or 'contacts').
+
+    Valid output: a HubSpot object id string when the deal has an association
+                  of this kind, else None.
+    Provenance:   id <- associations[kind]['results'][0]['id']
+
+    HubSpot's SDK returns `associations` as a dict on this API path (verified
+    against a live response on 2026-07-27), but older/other SDK paths return an
+    object with attributes. This reads BOTH shapes so an SDK version change
+    cannot silently reintroduce the NULL-company bug. Takes the FIRST result
+    only: a deal is assumed to map to one company; the response can contain
+    label variants (e.g. 'deal_to_company' and 'deal_to_company_unlabeled')
+    that repeat the same id, so first-wins is intended, not a bug.
+    """
+    if not associations:
+        return None
+
+    # Top level: dict {'companies': {...}} or object with .companies attribute
+    if isinstance(associations, dict):
+        block = associations.get(kind)
+    else:
+        block = getattr(associations, kind, None)
+    if not block:
+        return None
+
+    # Results list: dict {'results': [...]} or object with .results attribute
+    if isinstance(block, dict):
+        results = block.get("results")
+    else:
+        results = getattr(block, "results", None)
+    if not results:
+        return None
+
+    # First result: dict {'id': '...'} or object with .id attribute
+    first = results[0]
+    if isinstance(first, dict):
+        obj_id = first.get("id")
+    else:
+        obj_id = getattr(first, "id", None)
+
+    return str(obj_id) if obj_id is not None else None
+
+
 def fetch_all_contacts() -> list[HubSpotContact]:
     client = _client()
     results, after = [], None
@@ -119,12 +163,8 @@ def fetch_all_deals() -> list[HubSpotDeal]:
             is_closed = _bool_prop(p, "hs_is_closed")
             close_date_raw = p.get("closedate")
 
-            company_hs_id, contact_hs_id = None, None
-            if deal.associations:
-                if getattr(deal.associations, "companies", None) and deal.associations.companies.results:
-                    company_hs_id = str(deal.associations.companies.results[0].id)
-                if getattr(deal.associations, "contacts", None) and deal.associations.contacts.results:
-                    contact_hs_id = str(deal.associations.contacts.results[0].id)
+            company_hs_id = _first_association_id(deal.associations, "companies")
+            contact_hs_id = _first_association_id(deal.associations, "contacts")
 
             results.append(HubSpotDeal(
                 hubspot_id=deal.id,
